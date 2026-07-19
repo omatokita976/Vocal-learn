@@ -199,13 +199,14 @@ function loadVoices() {
   availableVoices = synthesis.getVoices();
   console.log('[Voix] Disponibles:', availableVoices.length);
   
-  // Afficher les voix disponibles dans la console
   availableVoices.forEach(v => {
     console.log(`  - ${v.name} (${v.lang}) [${v.localService ? 'local' : 'remote'}]`);
   });
 }
 
-// --- Sélection de la voix (MASCULINE vs FEMININE) ---
+// ============================================================
+// SÉLECTION DE LA VOIX : MASCULINE vs FEMININE
+// ============================================================
 function getSelectedVoice() {
   const isMale = document.querySelector('input[name="voice"]:checked').value === 'male';
   
@@ -213,52 +214,73 @@ function getSelectedVoice() {
     loadVoices();
   }
 
-  // Voix françaises
-  const frenchVoices = availableVoices.filter(v => v.lang.startsWith('fr'));
+  // 1. Récupérer toutes les voix françaises
+  let frenchVoices = availableVoices.filter(v => v.lang.startsWith('fr'));
   
-  // Voix anglaises (fallback)
-  const englishVoices = availableVoices.filter(v => v.lang.startsWith('en'));
-  
-  // Toutes les voix disponibles
-  const allVoices = frenchVoices.length > 0 ? frenchVoices : englishVoices;
-  
-  if (allVoices.length === 0) {
+  // 2. Si pas de voix française, prendre toutes les voix
+  if (frenchVoices.length === 0) {
+    frenchVoices = availableVoices;
+  }
+
+  if (frenchVoices.length === 0) {
+    console.warn('[Voix] Aucune voix disponible');
     return null;
   }
 
-  // --- VOIX MASCULINE ---
+  // === VOIX MASCULINE ===
   if (isMale) {
-    // Chercher des voix masculines en français
-    const maleFrench = allVoices.filter(v => 
-      /male|man|guy|david|pierre|thomas|henri|michel|jean|paul|vincent|antoine|sebastien|olivier|philippe|francois|eric|nicolas|christophe|marc|alexandre|m. /i.test(v.name)
+    // Mots-clés pour voix masculines
+    const maleKeywords = [
+      'male', 'man', 'guy', 'david', 'pierre', 'thomas', 'henri', 'michel', 
+      'jean', 'paul', 'vincent', 'antoine', 'sebastien', 'olivier', 'philippe',
+      'francois', 'eric', 'nicolas', 'christophe', 'marc', 'alexandre',
+      'm. ', 'mr ', 'monsieur', 'google uk english male', 'google us english male'
+    ];
+    
+    // Chercher une voix masculine
+    let maleVoice = frenchVoices.find(v => 
+      maleKeywords.some(keyword => v.name.toLowerCase().includes(keyword))
     );
     
-    if (maleFrench.length > 0) {
-      console.log('[Voix] Masculine sélectionnée:', maleFrench[0].name);
-      return maleFrench[0];
+    // Si trouvée, la retourner
+    if (maleVoice) {
+      console.log('[Voix] Masculine sélectionnée:', maleVoice.name);
+      return maleVoice;
     }
     
-    // Fallback : voix avec pitch bas
-    const fallback = allVoices[0];
-    console.log('[Voix] Masculine (fallback):', fallback.name);
-    return fallback;
+    // Fallback : voix avec pitch plus bas (effet masculin)
+    console.log('[Voix] Masculine (fallback):', frenchVoices[0].name);
+    return frenchVoices[0];
   }
 
-  // --- VOIX FEMININE ---
+  // === VOIX FEMININE ===
   else {
-    // Chercher des voix féminines en français
-    const femaleFrench = allVoices.filter(v => 
-      /female|woman|girl|samantha|claire|amelie|marie|zira|julie|sophie|emma|chloe|lea|ines|louise|alice|eve|alexia|elodie|madame|mme/i.test(v.name)
+    // Mots-clés pour voix féminines
+    const femaleKeywords = [
+      'female', 'woman', 'girl', 'samantha', 'claire', 'amelie', 'marie', 
+      'zira', 'julie', 'sophie', 'emma', 'chloe', 'lea', 'ines', 'louise', 
+      'alice', 'eve', 'alexia', 'elodie', 'madame', 'mme', 'ms', 'miss',
+      'google uk english female', 'google us english female'
+    ];
+    
+    // Chercher une voix féminine
+    let femaleVoice = frenchVoices.find(v => 
+      femaleKeywords.some(keyword => v.name.toLowerCase().includes(keyword))
     );
     
-    if (femaleFrench.length > 0) {
-      console.log('[Voix] Féminine sélectionnée:', femaleFrench[0].name);
-      return femaleFrench[0];
+    // Si trouvée, la retourner
+    if (femaleVoice) {
+      console.log('[Voix] Féminine sélectionnée:', femaleVoice.name);
+      return femaleVoice;
     }
     
-    // Si aucune voix féminine trouvée, prendre la première voix française
-    console.log('[Voix] Féminine (fallback):', allVoices[0].name);
-    return allVoices[0];
+    // Fallback : prendre une voix avec un nom qui semble féminin
+    const fallback = frenchVoices.find(v => 
+      !/male|man|guy|david|pierre|thomas|henri|michel|jean|paul|vincent|antoine|sebastien|olivier|philippe|francois|eric|nicolas|christophe|marc|alexandre/i.test(v.name)
+    ) || frenchVoices[0];
+    
+    console.log('[Voix] Féminine (fallback):', fallback.name);
+    return fallback;
   }
 }
 
@@ -387,7 +409,6 @@ function speakSegment(index) {
   utterance.rate = parseFloat(speedRange.value);
   utterance.pitch = 1.0;
   
-  // Appliquer la voix sélectionnée
   if (voice) {
     utterance.voice = voice;
     console.log('[Lecture] Voix utilisée:', voice.name);
@@ -507,3 +528,4 @@ document.addEventListener('click', () => {
 }, { once: true });
 
 console.log('📖 Vocal Learn chargé - Formats supportés: PDF, TXT, DOCX, EPUB');
+console.log('🎤 Voix: Masculine vs Féminine - Sélection automatique');
