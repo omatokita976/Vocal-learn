@@ -8,6 +8,9 @@
   <!-- PDF.js CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   
+  <!-- JSZip pour DOCX et EPUB -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -19,17 +22,17 @@
         <span class="icon">🎧</span>
         <h1>Vocal <span class="highlight">Learn</span></h1>
       </div>
-      <p class="tagline">Transforme tes PDF en audio personnalisé</p>
+      <p class="tagline">Transforme tes fichiers en audio personnalisé</p>
     </header>
 
     <!-- Dépôt du fichier -->
     <div class="drop-zone" id="dropZone">
       <div class="drop-content">
         <div class="upload-icon">📂</div>
-        <p>Glisse ton PDF ici ou <strong>clique pour choisir</strong></p>
-        <span class="file-hint">Format accepté : .pdf (max 10 Mo)</span>
+        <p>Glisse ton fichier ici ou <strong>clique pour choisir</strong></p>
+        <span class="file-hint">📄 PDF · 📝 TXT · 📘 DOCX · 📖 EPUB (max 10 Mo)</span>
       </div>
-      <input type="file" id="fileInput" accept=".pdf" />
+      <input type="file" id="fileInput" accept=".pdf,.txt,.docx,.epub" />
       
       <!-- Barre de progression d'upload -->
       <div class="upload-progress" id="uploadProgress">
@@ -82,11 +85,11 @@
     <!-- Aperçu du texte extrait -->
     <div class="preview">
       <p><strong>📝 Texte extrait :</strong></p>
-      <div id="textPreview">(En attente d'un PDF...)</div>
+      <div id="textPreview">(En attente d'un fichier...)</div>
     </div>
 
     <!-- Statut -->
-    <div id="status">✅ Prêt à lire</div>
+    <div id="status">📚 Prêt à lire (PDF, TXT, DOCX, EPUB)</div>
 
     <!-- Pied de page -->
     <footer>

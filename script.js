@@ -41,9 +41,10 @@ function setStatus(message, type = 'ready') {
   status.innerHTML = '';
   status.appendChild(dot);
   status.appendChild(document.createTextNode(' ' + message));
+  console.log('[Status]', message, type);
 }
 
-setStatus('Prêt à lire', 'ready');
+setStatus('📚 Prêt à lire (PDF, TXT, DOCX, EPUB)', 'ready');
 
 // --- Upload avec vraie progression ---
 function uploadFileWithProgress(file) {
@@ -54,7 +55,6 @@ function uploadFileWithProgress(file) {
 
     const reader = new FileReader();
 
-    // Suivi de la progression réelle
     reader.onprogress = (event) => {
       if (event.lengthComputable) {
         const percent = Math.round((event.loaded / event.total) * 100);
@@ -64,7 +64,6 @@ function uploadFileWithProgress(file) {
     };
 
     reader.onload = (event) => {
-      // Progression à 100%
       uploadProgressBar.style.width = '100%';
       uploadProgressText.textContent = '100%';
       
@@ -79,15 +78,142 @@ function uploadFileWithProgress(file) {
       reject(error);
     };
 
-    // Lire le fichier comme ArrayBuffer
     reader.readAsArrayBuffer(file);
   });
 }
 
-// --- Gestion du fichier PDF ---
+// --- Extraction de texte selon le format ---
+async function extractTextFromFile(file, arrayBuffer) {
+  const extension = file.name.split('.').pop().toLowerCase();
+  let extracted = '';
+
+  switch (extension) {
+    case 'pdf':
+      return await extractPDFText(arrayBuffer);
+      
+    case 'txt':
+      return await extractTXTText(arrayBuffer);
+      
+    case 'docx':
+      return await extractDOCXText(arrayBuffer);
+      
+    case 'epub':
+      return await extractEPUBText(arrayBuffer);
+      
+    default:
+      throw new Error(`Format non supporté: ${extension}`);
+  }
+}
+
+// --- Extraction PDF ---
+async function extractPDFText(arrayBuffer) {
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let extracted = '';
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const strings = content.items.map(item => item.str);
+    extracted += strings.join(' ') + '\n\n';
+  }
+  
+  return extracted;
+}
+
+// --- Extraction TXT ---
+async function extractTXTText(arrayBuffer) {
+  const decoder = new TextDecoder('utf-8');
+  const text = decoder.decode(arrayBuffer);
+  return text;
+}
+
+// --- Extraction DOCX ---
+async function extractDOCXText(arrayBuffer) {
+  try {
+    // Charger la librairie JSZip pour décompresser le DOCX
+    const JSZip = window.JSZip;
+    if (!JSZip) {
+      throw new Error('JSZip non chargé. Vérifie la connexion internet.');
+    }
+    
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    let extracted = '';
+    
+    // Le texte principal est dans word/document.xml
+    const docFile = zip.file('word/document.xml');
+    if (docFile) {
+      const xmlContent = await docFile.async('text');
+      // Extraire le texte entre les balises <w:t>
+      const matches = xmlContent.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+      extracted = matches.map(m => m.replace(/<[^>]*>/g, '')).join(' ');
+    }
+    
+    // Si pas de texte trouvé, essayer les autres fichiers
+    if (!extracted.trim()) {
+      const files = zip.file(/\.xml$/);
+      for (const file of files) {
+        const content = await file.async('text');
+        const matches = content.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+        extracted += matches.map(m => m.replace(/<[^>]*>/g, '')).join(' ');
+      }
+    }
+    
+    return extracted;
+  } catch (error) {
+    console.error('Erreur DOCX:', error);
+    throw new Error('Impossible de lire le fichier DOCX');
+  }
+}
+
+// --- Extraction EPUB ---
+async function extractEPUBText(arrayBuffer) {
+  try {
+    const JSZip = window.JSZip;
+    if (!JSZip) {
+      throw new Error('JSZip non chargé. Vérifie la connexion internet.');
+    }
+    
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    let extracted = '';
+    
+    // Lire le fichier de contenu (content.opf)
+    const container = await zip.file('META-INF/container.xml').async('text');
+    const rootFileMatch = container.match(/full-path="([^"]+\.opf)"/);
+    const rootFile = rootFileMatch ? rootFileMatch[1] : 'content.opf';
+    
+    // Lire le manifeste
+    const opf = await zip.file(rootFile).async('text');
+    const hrefMatches = opf.match(/href="([^"]+\.xhtml)"/g) || [];
+    const hrefs = hrefMatches.map(m => m.replace(/href="([^"]+)"/, '$1'));
+    
+    // Lire chaque chapitre
+    for (const href of hrefs) {
+      try {
+        const content = await zip.file(href).async('text');
+        // Extraire le texte entre les balises HTML
+        const text = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        extracted += text + '\n\n';
+      } catch (e) {
+        console.warn('Impossible de lire:', href);
+      }
+    }
+    
+    return extracted;
+  } catch (error) {
+    console.error('Erreur EPUB:', error);
+    throw new Error('Impossible de lire le fichier EPUB');
+  }
+}
+
+// --- Gestion du fichier ---
 async function handleFile(file) {
-  if (!file || file.type !== 'application/pdf') {
-    setStatus('❌ Veuillez sélectionner un fichier PDF valide.', 'error');
+  // Vérifier le type de fichier
+  const extension = file.name.split('.').pop().toLowerCase();
+  const supportedFormats = ['pdf', 'txt', 'docx', 'epub'];
+  
+  if (!supportedFormats.includes(extension)) {
+    setStatus(`❌ Format non supporté. Formats acceptés: ${supportedFormats.join(', ')}`, 'error');
+    textPreview.textContent = `❌ Le format .${extension} n'est pas supporté.\n\n📚 Formats acceptés :\n- PDF (.pdf)\n- Texte (.txt)\n- Word (.docx)\n- Ebook (.epub)`;
     return;
   }
 
@@ -97,40 +223,45 @@ async function handleFile(file) {
   fileSize.textContent = sizeMB + ' Mo';
   fileLoaded.style.display = 'inline-flex';
 
-  setStatus('⏳ Téléchargement du fichier...', 'loading');
+  setStatus(`⏳ Chargement du fichier .${extension}...`, 'loading');
 
   try {
-    // 1. Upload avec vraie progression
+    // 1. Upload avec progression
     const arrayBuffer = await uploadFileWithProgress(file);
     
-    setStatus('⏳ Extraction du texte...', 'loading');
+    setStatus(`⏳ Extraction du texte (${extension.toUpperCase()})...`, 'loading');
 
-    // 2. Extraction du texte du PDF
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let extracted = '';
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const strings = content.items.map(item => item.str);
-      extracted += strings.join(' ') + '\n\n';
-    }
-
+    // 2. Extraction selon le format
+    const extracted = await extractTextFromFile(file, arrayBuffer);
     fullText = extracted.trim();
-    if (!fullText) {
-      setStatus('⚠️ Aucun texte lisible dans ce PDF.', 'error');
-      textPreview.textContent = '(Aucun texte extrait)';
+    
+    console.log(`[${extension.toUpperCase()}] Texte extrait:`, fullText.substring(0, 200) + '...');
+    console.log(`[${extension.toUpperCase()}] Longueur:`, fullText.length);
+
+    if (!fullText || fullText.length < 5) {
+      setStatus(`⚠️ Aucun texte lisible dans ce fichier .${extension}`, 'error');
+      textPreview.textContent = `❌ Aucun texte n'a pu être extrait de ce fichier .${extension}.\n\nVérifie que le fichier n'est pas corrompu ou protégé.`;
+      startBtn.disabled = true;
+      pauseBtn.disabled = true;
+      stopBtn.disabled = true;
       return;
     }
 
     textPreview.textContent = fullText;
-    setStatus(`✅ ${pdf.numPages} page(s) extraites — ${fullText.length} caractères.`, 'ready');
+    setStatus(`✅ ${fullText.length} caractères extraits du fichier .${extension}`, 'ready');
 
-    // Découpage en segments (phrases)
-    speechSegments = fullText.split(/\n{2,}|\.\s+/).filter(s => s.trim().length > 0);
+    // Découpage en segments
+    speechSegments = fullText.split(/\n{2,}|\.\s+|\.\n/).filter(s => s.trim().length > 10);
+    
+    if (speechSegments.length < 2) {
+      speechSegments = fullText.split(/\n{2,}/).filter(s => s.trim().length > 10);
+    }
+    
     if (speechSegments.length === 0) {
       speechSegments = [fullText];
     }
+    
+    console.log('[Segments] Créés:', speechSegments.length);
 
     // Réactiver les contrôles
     startBtn.disabled = false;
@@ -147,9 +278,13 @@ async function handleFile(file) {
     if (synthesis.speaking) synthesis.cancel();
 
   } catch (error) {
-    console.error(error);
-    setStatus('❌ Erreur lors du traitement du PDF.', 'error');
+    console.error('[ERREUR]', error);
+    setStatus(`❌ Erreur: ${error.message}`, 'error');
+    textPreview.textContent = `❌ Erreur lors du traitement: ${error.message}\n\nVérifie que le fichier n'est pas corrompu.`;
     uploadProgress.classList.remove('active');
+    startBtn.disabled = true;
+    pauseBtn.disabled = true;
+    stopBtn.disabled = true;
   }
 }
 
@@ -190,9 +325,9 @@ function getSelectedVoice() {
   if (preferred.length === 0) preferred = voices;
 
   if (isMale) {
-    return preferred.find(v => /male|man|guy|david|pierre|thomas/i.test(v.name)) || preferred[0];
+    return preferred.find(v => /male|man|guy|david|pierre|thomas|google.*male/i.test(v.name)) || preferred[0];
   } else {
-    return preferred.find(v => /female|woman|girl|samantha|claire|amelie|marie/i.test(v.name)) || preferred[0];
+    return preferred.find(v => /female|woman|girl|samantha|claire|amelie|marie|zira|google.*female/i.test(v.name)) || preferred[0];
   }
 }
 
@@ -216,8 +351,9 @@ function speakSegment(index) {
   }
 
   const text = speechSegments[index];
-  if (!text.trim()) {
-    speakSegment(index + 1);
+  if (!text || text.trim().length < 3) {
+    currentIndex++;
+    speakSegment(currentIndex);
     return;
   }
 
@@ -238,7 +374,7 @@ function speakSegment(index) {
 
   utterance.onerror = (err) => {
     console.warn('Erreur vocale:', err);
-    setStatus('⚠️ Erreur de synthèse vocale.', 'error');
+    setStatus(`⚠️ Erreur de synthèse vocale`, 'error');
     isSpeaking = false;
     startBtn.disabled = false;
     startBtn.innerHTML = '<span class="btn-icon">▶</span> Start';
@@ -259,8 +395,16 @@ function speakSegment(index) {
 
 // --- Boutons ---
 startBtn.addEventListener('click', () => {
-  if (speechSegments.length === 0) return;
-  if (synthesis.speaking) synthesis.cancel();
+  console.log('[Start] Clic - segments:', speechSegments.length);
+  
+  if (speechSegments.length === 0) {
+    setStatus('⚠️ Aucun texte à lire. Charge d\'abord un fichier valide.', 'error');
+    return;
+  }
+  
+  if (synthesis.speaking) {
+    synthesis.cancel();
+  }
 
   if (isPaused && utterance) {
     isPaused = false;
@@ -279,6 +423,7 @@ startBtn.addEventListener('click', () => {
 });
 
 pauseBtn.addEventListener('click', () => {
+  console.log('[Pause] Clic');
   if (synthesis.speaking && !isPaused) {
     synthesis.pause();
     isPaused = true;
@@ -290,6 +435,7 @@ pauseBtn.addEventListener('click', () => {
 });
 
 stopBtn.addEventListener('click', () => {
+  console.log('[Stop] Clic');
   synthesis.cancel();
   isSpeaking = false;
   isPaused = false;
@@ -310,7 +456,9 @@ speedRange.addEventListener('input', () => {
 
 // --- Initialisation des voix ---
 if (synthesis.getVoices().length === 0) {
-  synthesis.onvoiceschanged = () => { synthesis.getVoices(); };
+  synthesis.onvoiceschanged = () => { 
+    console.log('[Voix] Chargées:', synthesis.getVoices().length);
+  };
 }
 
 // --- Réveil des voix au premier clic ---
@@ -319,3 +467,5 @@ document.addEventListener('click', () => {
     synthesis.getVoices();
   }
 }, { once: true });
+
+console.log('📖 Vocal Learn chargé - Formats supportés: PDF, TXT, DOCX, EPUB');
