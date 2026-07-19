@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vocal Learn - Lecture PDF vocale</title>
+  
+  <!-- PDF.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="container">
+    <!-- En-tête -->
+    <header>
+      <div class="logo">
+        <span class="icon">🎧</span>
+        <h1>Vocal <span class="highlight">Learn</span></h1>
+      </div>
+      <p class="tagline">Transforme tes PDF en audio personnalisé</p>
+    </header>
+
+    <!-- Dépôt du fichier -->
+    <div class="drop-zone" id="dropZone">
+      <p>📂 Glisse ton PDF ici ou <strong>clique pour choisir</strong></p>
+      <input type="file" id="fileInput" accept=".pdf" />
+    </div>
+
+    <!-- Choix de la voix -->
+    <div class="voice-selector">
+      <label class="voice-option male">
+        <input type="radio" name="voice" value="male" checked />
+        <span>🧑 Masculine</span>
+      </label>
+      <label class="voice-option female">
+        <input type="radio" name="voice" value="female" />
+        <span>👩 Féminine</span>
+      </label>
+    </div>
+
+    <!-- Contrôles -->
+    <div class="controls">
+      <button id="playBtn" disabled>▶ Lire</button>
+      <button id="pauseBtn" disabled>⏸ Pause</button>
+      <button id="stopBtn" disabled>⏹ Arrêter</button>
+      
+      <div class="speed-control">
+        <label>Vitesse : <span id="speedLabel">1.0×</span></label>
+        <input type="range" id="speedRange" min="0.5" max="2.0" step="0.1" value="1.0" disabled />
+      </div>
+    </div>
+
+    <!-- Progression -->
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+    </div>
+    <div class="progress-text" id="progressText">0%</div>
+
+    <!-- Aperçu du texte extrait -->
+    <div class="preview">
+      <p><strong>📝 Texte extrait :</strong></p>
+      <div id="textPreview">(En attente d'un PDF...)</div>
+    </div>
+
+    <!-- Statut -->
+    <div id="status">✅ Prêt à lire</div>
+
+    <!-- Pied de page -->
+    <footer>
+      <div class="footer-content">
+        <div class="footer-info">
+          <p class="footer-name">📬 Me contacter</p>
+          <p>✉️ <a href="mailto:omatokita008@gmail.com">omatokita008@gmail.com</a></p>
+          <p>💬 <a href="https://wa.me/237692422754" target="_blank">WhatsApp : +237 692 422 754</a></p>
+          <p>📨 <a href="https://t.me/oma_tokita12" target="_blank">Telegram : @oma_tokita12</a></p>
+        </div>
+        <div class="footer-social">
+          <p class="footer-name">🌐 Suis-moi</p>
+          <div class="social-links">
+            <a href="https://t.me/oma_tokita12" target="_blank">📨 Telegram</a>
+            <a href="https://wa.me/237692422754" target="_blank">💬 WhatsApp</a>
+            <a href="mailto:omatokita008@gmail.com">✉️ Email</a>
+          </div>
+        </div>
+        <div class="footer-copy">
+          <p>© 2026 Vocal Learn — Tous droits réservés</p>
+          <p class="footer-small">Fait avec ❤️ par Oma Tokita</p>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
