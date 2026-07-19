@@ -153,6 +153,7 @@ header {
   z-index: 2;
 }
 
+/* --- Upload progress --- */
 .upload-progress {
   display: none;
   margin-top: 16px;
@@ -183,6 +184,7 @@ header {
   color: #7a92b8;
 }
 
+/* --- File loaded --- */
 .file-loaded {
   margin-top: 12px;
   padding: 8px 16px;
@@ -451,7 +453,7 @@ header {
 }
 
 /* ============================================
-   SECTION CONTACT - SIMPLIFIÉE
+   SECTION CONTACT - AVEC PORTFOLIO
    ============================================ */
 footer {
   margin-top: 30px;
@@ -482,7 +484,7 @@ footer {
 .contact-grid {
   display: flex;
   justify-content: center;
-  gap: 30px;
+  gap: 20px;
   flex-wrap: wrap;
 }
 
@@ -490,15 +492,15 @@ footer {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px 24px;
+  gap: 6px;
+  padding: 14px 20px;
   border-radius: 14px;
   background: rgba(18, 30, 45, 0.5);
   border: 1px solid rgba(40, 52, 75, 0.3);
   transition: 0.3s;
   text-decoration: none;
   color: #b6c8e6;
-  min-width: 80px;
+  min-width: 70px;
 }
 
 .contact-card:hover {
@@ -509,7 +511,7 @@ footer {
 }
 
 .contact-card .contact-icon {
-  font-size: 2.2rem;
+  font-size: 2rem;
   transition: 0.3s;
 }
 
@@ -518,13 +520,13 @@ footer {
 }
 
 .contact-card .contact-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #6a7f9e;
   font-weight: 500;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
-/* Couleurs spécifiques au survol */
+/* --- Couleurs spécifiques au survol --- */
 .contact-card.whatsapp:hover {
   border-color: #25D366;
   box-shadow: 0 8px 25px rgba(37, 211, 102, 0.15);
@@ -540,6 +542,12 @@ footer {
   box-shadow: 0 8px 25px rgba(234, 67, 53, 0.15);
 }
 
+.contact-card.portfolio:hover {
+  border-color: #a78bfa;
+  box-shadow: 0 8px 25px rgba(167, 139, 250, 0.15);
+}
+
+/* --- Copyright --- */
 .footer-copy {
   text-align: center;
   margin-top: 18px;
@@ -574,15 +582,22 @@ footer {
   background: #4d6483;
 }
 
-/* --- Responsive --- */
+/* ============================================
+   RESPONSIVE
+   ============================================ */
 @media (max-width: 700px) {
-  .footer-content {
-    grid-template-columns: 1fr;
-    gap: 20px;
+  .container {
+    padding: 20px 16px;
   }
   
-  .footer-copy {
-    grid-column: 1;
+  .logo h1 {
+    font-size: 1.8rem;
+  }
+  
+  .voice-selector {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
   }
   
   .controls {
@@ -595,30 +610,82 @@ footer {
     justify-content: center;
   }
   
-  .voice-selector {
-    flex-direction: column;
-    align-items: center;
+  .contact-grid {
     gap: 12px;
   }
   
-  .container {
-    padding: 20px 16px;
-  }
-  
-  .logo h1 {
-    font-size: 1.8rem;
-  }
-  
-  .contact-grid {
-    gap: 16px;
-  }
-  
   .contact-card {
-    padding: 12px 18px;
-    min-width: 60px;
+    padding: 10px 14px;
+    min-width: 55px;
   }
   
   .contact-card .contact-icon {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
+  }
+  
+  .contact-card .contact-label {
+    font-size: 0.6rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 16px 12px;
+    border-radius: 20px;
+  }
+  
+  .logo h1 {
+    font-size: 1.5rem;
+  }
+  
+  .logo .icon {
+    font-size: 2rem;
+  }
+  
+  .drop-zone {
+    padding: 25px 15px;
+  }
+  
+  .drop-zone p {
+    font-size: 0.95rem;
+  }
+  
+  .upload-icon {
+    font-size: 2.4rem;
+  }
+  
+  .controls button {
+    font-size: 0.85rem;
+    padding: 8px 16px;
+  }
+  
+  .btn-start {
+    padding: 8px 20px !important;
+  }
+  
+  .contact-grid {
+    gap: 8px;
+  }
+  
+  .contact-card {
+    padding: 8px 10px;
+    min-width: 45px;
+    border-radius: 10px;
+  }
+  
+  .contact-card .contact-icon {
+    font-size: 1.3rem;
+  }
+  
+  .contact-card .contact-label {
+    font-size: 0.5rem;
+  }
+  
+  .footer-title {
+    font-size: 0.7rem;
+  }
+  
+  .footer-copy p {
+    font-size: 0.7rem;
   }
 }
