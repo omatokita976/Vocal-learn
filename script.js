@@ -27,6 +27,7 @@ let isPaused = false;
 let isSpeaking = false;
 let utterance = null;
 let synthesis = window.speechSynthesis;
+let availableVoices = [];
 
 // Désactiver les boutons au départ
 startBtn.disabled = true;
@@ -90,16 +91,12 @@ async function extractTextFromFile(file, arrayBuffer) {
   switch (extension) {
     case 'pdf':
       return await extractPDFText(arrayBuffer);
-      
     case 'txt':
       return await extractTXTText(arrayBuffer);
-      
     case 'docx':
       return await extractDOCXText(arrayBuffer);
-      
     case 'epub':
       return await extractEPUBText(arrayBuffer);
-      
     default:
       throw new Error(`Format non supporté: ${extension}`);
   }
@@ -130,7 +127,6 @@ async function extractTXTText(arrayBuffer) {
 // --- Extraction DOCX ---
 async function extractDOCXText(arrayBuffer) {
   try {
-    // Charger la librairie JSZip pour décompresser le DOCX
     const JSZip = window.JSZip;
     if (!JSZip) {
       throw new Error('JSZip non chargé. Vérifie la connexion internet.');
@@ -139,16 +135,13 @@ async function extractDOCXText(arrayBuffer) {
     const zip = await JSZip.loadAsync(arrayBuffer);
     let extracted = '';
     
-    // Le texte principal est dans word/document.xml
     const docFile = zip.file('word/document.xml');
     if (docFile) {
       const xmlContent = await docFile.async('text');
-      // Extraire le texte entre les balises <w:t>
       const matches = xmlContent.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
       extracted = matches.map(m => m.replace(/<[^>]*>/g, '')).join(' ');
     }
     
-    // Si pas de texte trouvé, essayer les autres fichiers
     if (!extracted.trim()) {
       const files = zip.file(/\.xml$/);
       for (const file of files) {
@@ -176,21 +169,17 @@ async function extractEPUBText(arrayBuffer) {
     const zip = await JSZip.loadAsync(arrayBuffer);
     let extracted = '';
     
-    // Lire le fichier de contenu (content.opf)
     const container = await zip.file('META-INF/container.xml').async('text');
     const rootFileMatch = container.match(/full-path="([^"]+\.opf)"/);
     const rootFile = rootFileMatch ? rootFileMatch[1] : 'content.opf';
     
-    // Lire le manifeste
     const opf = await zip.file(rootFile).async('text');
     const hrefMatches = opf.match(/href="([^"]+\.xhtml)"/g) || [];
     const hrefs = hrefMatches.map(m => m.replace(/href="([^"]+)"/, '$1'));
     
-    // Lire chaque chapitre
     for (const href of hrefs) {
       try {
         const content = await zip.file(href).async('text');
-        // Extraire le texte entre les balises HTML
         const text = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
         extracted += text + '\n\n';
       } catch (e) {
@@ -205,9 +194,76 @@ async function extractEPUBText(arrayBuffer) {
   }
 }
 
+// --- Chargement des voix ---
+function loadVoices() {
+  availableVoices = synthesis.getVoices();
+  console.log('[Voix] Disponibles:', availableVoices.length);
+  
+  // Afficher les voix disponibles dans la console
+  availableVoices.forEach(v => {
+    console.log(`  - ${v.name} (${v.lang}) [${v.localService ? 'local' : 'remote'}]`);
+  });
+}
+
+// --- Sélection de la voix (MASCULINE vs FEMININE) ---
+function getSelectedVoice() {
+  const isMale = document.querySelector('input[name="voice"]:checked').value === 'male';
+  
+  if (availableVoices.length === 0) {
+    loadVoices();
+  }
+
+  // Voix françaises
+  const frenchVoices = availableVoices.filter(v => v.lang.startsWith('fr'));
+  
+  // Voix anglaises (fallback)
+  const englishVoices = availableVoices.filter(v => v.lang.startsWith('en'));
+  
+  // Toutes les voix disponibles
+  const allVoices = frenchVoices.length > 0 ? frenchVoices : englishVoices;
+  
+  if (allVoices.length === 0) {
+    return null;
+  }
+
+  // --- VOIX MASCULINE ---
+  if (isMale) {
+    // Chercher des voix masculines en français
+    const maleFrench = allVoices.filter(v => 
+      /male|man|guy|david|pierre|thomas|henri|michel|jean|paul|vincent|antoine|sebastien|olivier|philippe|francois|eric|nicolas|christophe|marc|alexandre|m. /i.test(v.name)
+    );
+    
+    if (maleFrench.length > 0) {
+      console.log('[Voix] Masculine sélectionnée:', maleFrench[0].name);
+      return maleFrench[0];
+    }
+    
+    // Fallback : voix avec pitch bas
+    const fallback = allVoices[0];
+    console.log('[Voix] Masculine (fallback):', fallback.name);
+    return fallback;
+  }
+
+  // --- VOIX FEMININE ---
+  else {
+    // Chercher des voix féminines en français
+    const femaleFrench = allVoices.filter(v => 
+      /female|woman|girl|samantha|claire|amelie|marie|zira|julie|sophie|emma|chloe|lea|ines|louise|alice|eve|alexia|elodie|madame|mme/i.test(v.name)
+    );
+    
+    if (femaleFrench.length > 0) {
+      console.log('[Voix] Féminine sélectionnée:', femaleFrench[0].name);
+      return femaleFrench[0];
+    }
+    
+    // Si aucune voix féminine trouvée, prendre la première voix française
+    console.log('[Voix] Féminine (fallback):', allVoices[0].name);
+    return allVoices[0];
+  }
+}
+
 // --- Gestion du fichier ---
 async function handleFile(file) {
-  // Vérifier le type de fichier
   const extension = file.name.split('.').pop().toLowerCase();
   const supportedFormats = ['pdf', 'txt', 'docx', 'epub'];
   
@@ -217,7 +273,6 @@ async function handleFile(file) {
     return;
   }
 
-  // Afficher le nom et la taille
   const sizeMB = (file.size / 1024 / 1024).toFixed(1);
   fileName.textContent = file.name;
   fileSize.textContent = sizeMB + ' Mo';
@@ -226,12 +281,9 @@ async function handleFile(file) {
   setStatus(`⏳ Chargement du fichier .${extension}...`, 'loading');
 
   try {
-    // 1. Upload avec progression
     const arrayBuffer = await uploadFileWithProgress(file);
-    
     setStatus(`⏳ Extraction du texte (${extension.toUpperCase()})...`, 'loading');
 
-    // 2. Extraction selon le format
     const extracted = await extractTextFromFile(file, arrayBuffer);
     fullText = extracted.trim();
     
@@ -250,7 +302,6 @@ async function handleFile(file) {
     textPreview.textContent = fullText;
     setStatus(`✅ ${fullText.length} caractères extraits du fichier .${extension}`, 'ready');
 
-    // Découpage en segments
     speechSegments = fullText.split(/\n{2,}|\.\s+|\.\n/).filter(s => s.trim().length > 10);
     
     if (speechSegments.length < 2) {
@@ -263,7 +314,6 @@ async function handleFile(file) {
     
     console.log('[Segments] Créés:', speechSegments.length);
 
-    // Réactiver les contrôles
     startBtn.disabled = false;
     startBtn.innerHTML = '<span class="btn-icon">▶</span> Start';
     pauseBtn.disabled = true;
@@ -312,32 +362,6 @@ dropZone.addEventListener('drop', (e) => {
 });
 
 // --- Synthèse vocale ---
-function getSelectedVoice() {
-  const isMale = document.querySelector('input[name="voice"]:checked').value === 'male';
-  const voices = synthesis.getVoices();
-  if (voices.length === 0) return null;
-
-  let lang = 'fr-FR';
-  let fallback = 'en-US';
-
-  let preferred = voices.filter(v => v.lang.startsWith(lang));
-  if (preferred.length === 0) preferred = voices.filter(v => v.lang.startsWith(fallback));
-  if (preferred.length === 0) preferred = voices;
-
-  if (isMale) {
-    return preferred.find(v => /male|man|guy|david|pierre|thomas|google.*male/i.test(v.name)) || preferred[0];
-  } else {
-    return preferred.find(v => /female|woman|girl|samantha|claire|amelie|marie|zira|google.*female/i.test(v.name)) || preferred[0];
-  }
-}
-
-function updateProgress() {
-  if (speechSegments.length === 0) return;
-  const percent = Math.min(100, Math.round((currentIndex / speechSegments.length) * 100));
-  progressFill.style.width = percent + '%';
-  progressText.textContent = percent + '%';
-}
-
 function speakSegment(index) {
   if (index >= speechSegments.length) {
     setStatus('✅ Lecture terminée !', 'ready');
@@ -362,7 +386,12 @@ function speakSegment(index) {
   utterance.lang = 'fr-FR';
   utterance.rate = parseFloat(speedRange.value);
   utterance.pitch = 1.0;
-  if (voice) utterance.voice = voice;
+  
+  // Appliquer la voix sélectionnée
+  if (voice) {
+    utterance.voice = voice;
+    console.log('[Lecture] Voix utilisée:', voice.name);
+  }
 
   utterance.onend = () => {
     if (!isPaused) {
@@ -391,6 +420,13 @@ function speakSegment(index) {
   stopBtn.disabled = false;
   setStatus(`🔊 Lecture ${index + 1}/${speechSegments.length}`, 'playing');
   updateProgress();
+}
+
+function updateProgress() {
+  if (speechSegments.length === 0) return;
+  const percent = Math.min(100, Math.round((currentIndex / speechSegments.length) * 100));
+  progressFill.style.width = percent + '%';
+  progressText.textContent = percent + '%';
 }
 
 // --- Boutons ---
@@ -457,14 +493,16 @@ speedRange.addEventListener('input', () => {
 // --- Initialisation des voix ---
 if (synthesis.getVoices().length === 0) {
   synthesis.onvoiceschanged = () => { 
-    console.log('[Voix] Chargées:', synthesis.getVoices().length);
+    loadVoices();
   };
+} else {
+  loadVoices();
 }
 
 // --- Réveil des voix au premier clic ---
 document.addEventListener('click', () => {
   if (synthesis.getVoices().length === 0) {
-    synthesis.getVoices();
+    loadVoices();
   }
 }, { once: true });
 
