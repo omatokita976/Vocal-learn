@@ -24,8 +24,25 @@
 
     <!-- Dépôt du fichier -->
     <div class="drop-zone" id="dropZone">
-      <p>📂 Glisse ton PDF ici ou <strong>clique pour choisir</strong></p>
+      <div class="drop-content">
+        <div class="upload-icon">📂</div>
+        <p>Glisse ton PDF ici ou <strong>clique pour choisir</strong></p>
+        <span class="file-hint">Format accepté : .pdf (max 10 Mo)</span>
+      </div>
       <input type="file" id="fileInput" accept=".pdf" />
+      
+      <!-- Barre de progression d'upload -->
+      <div class="upload-progress" id="uploadProgress">
+        <div class="upload-progress-bar" id="uploadProgressBar"></div>
+        <span class="upload-progress-text" id="uploadProgressText">0%</span>
+      </div>
+      
+      <!-- Nom du fichier chargé -->
+      <div class="file-loaded" id="fileLoaded" style="display: none;">
+        <span>✅</span>
+        <span id="fileName">fichier.pdf</span>
+        <span class="file-size" id="fileSize">0 Mo</span>
+      </div>
     </div>
 
     <!-- Choix de la voix -->
@@ -42,7 +59,9 @@
 
     <!-- Contrôles -->
     <div class="controls">
-      <button id="playBtn" disabled>▶ Lire</button>
+      <button id="startBtn" class="btn-start" disabled>
+        <span class="btn-icon">▶</span> Start
+      </button>
       <button id="pauseBtn" disabled>⏸ Pause</button>
       <button id="stopBtn" disabled>⏹ Arrêter</button>
       
@@ -52,11 +71,13 @@
       </div>
     </div>
 
-    <!-- Progression -->
-    <div class="progress-bar">
-      <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+    <!-- Progression de lecture -->
+    <div class="progress-container">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+      <div class="progress-text" id="progressText">0%</div>
     </div>
-    <div class="progress-text" id="progressText">0%</div>
 
     <!-- Aperçu du texte extrait -->
     <div class="preview">

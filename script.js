@@ -4,7 +4,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 // Éléments DOM
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
-const playBtn = document.getElementById('playBtn');
+const startBtn = document.getElementById('startBtn');
 const pauseBtn = document.getElementById('pauseBtn');
 const stopBtn = document.getElementById('stopBtn');
 const speedRange = document.getElementById('speedRange');
@@ -13,7 +13,12 @@ const textPreview = document.getElementById('textPreview');
 const status = document.getElementById('status');
 const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
-const voiceRadios = document.querySelectorAll('input[name="voice"]');
+const uploadProgress = document.getElementById('uploadProgress');
+const uploadProgressBar = document.getElementById('uploadProgressBar');
+const uploadProgressText = document.getElementById('uploadProgressText');
+const fileLoaded = document.getElementById('fileLoaded');
+const fileName = document.getElementById('fileName');
+const fileSize = document.getElementById('fileSize');
 
 let fullText = '';
 let speechSegments = [];
@@ -24,58 +29,128 @@ let utterance = null;
 let synthesis = window.speechSynthesis;
 
 // Désactiver les boutons au départ
-playBtn.disabled = true;
+startBtn.disabled = true;
 pauseBtn.disabled = true;
 stopBtn.disabled = true;
 speedRange.disabled = true;
 
+// --- Mise à jour du statut ---
+function setStatus(message, type = 'ready') {
+  const dot = document.createElement('span');
+  dot.className = `status-dot ${type}`;
+  status.innerHTML = '';
+  status.appendChild(dot);
+  status.appendChild(document.createTextNode(' ' + message));
+}
+
+setStatus('Prêt à lire', 'ready');
+
+// --- Upload avec vraie progression ---
+function uploadFileWithProgress(file) {
+  return new Promise((resolve, reject) => {
+    uploadProgress.classList.add('active');
+    uploadProgressBar.style.width = '0%';
+    uploadProgressText.textContent = '0%';
+
+    const reader = new FileReader();
+
+    // Suivi de la progression réelle
+    reader.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        uploadProgressBar.style.width = percent + '%';
+        uploadProgressText.textContent = percent + '%';
+      }
+    };
+
+    reader.onload = (event) => {
+      // Progression à 100%
+      uploadProgressBar.style.width = '100%';
+      uploadProgressText.textContent = '100%';
+      
+      setTimeout(() => {
+        uploadProgress.classList.remove('active');
+        resolve(event.target.result);
+      }, 500);
+    };
+
+    reader.onerror = (error) => {
+      uploadProgress.classList.remove('active');
+      reject(error);
+    };
+
+    // Lire le fichier comme ArrayBuffer
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 // --- Gestion du fichier PDF ---
 async function handleFile(file) {
   if (!file || file.type !== 'application/pdf') {
-    status.textContent = '❌ Veuillez sélectionner un fichier PDF valide.';
+    setStatus('❌ Veuillez sélectionner un fichier PDF valide.', 'error');
     return;
   }
 
-  status.textContent = '⏳ Extraction du texte...';
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  let extracted = '';
+  // Afficher le nom et la taille
+  const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+  fileName.textContent = file.name;
+  fileSize.textContent = sizeMB + ' Mo';
+  fileLoaded.style.display = 'inline-flex';
 
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const strings = content.items.map(item => item.str);
-    extracted += strings.join(' ') + '\n\n';
+  setStatus('⏳ Téléchargement du fichier...', 'loading');
+
+  try {
+    // 1. Upload avec vraie progression
+    const arrayBuffer = await uploadFileWithProgress(file);
+    
+    setStatus('⏳ Extraction du texte...', 'loading');
+
+    // 2. Extraction du texte du PDF
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let extracted = '';
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const strings = content.items.map(item => item.str);
+      extracted += strings.join(' ') + '\n\n';
+    }
+
+    fullText = extracted.trim();
+    if (!fullText) {
+      setStatus('⚠️ Aucun texte lisible dans ce PDF.', 'error');
+      textPreview.textContent = '(Aucun texte extrait)';
+      return;
+    }
+
+    textPreview.textContent = fullText;
+    setStatus(`✅ ${pdf.numPages} page(s) extraites — ${fullText.length} caractères.`, 'ready');
+
+    // Découpage en segments (phrases)
+    speechSegments = fullText.split(/\n{2,}|\.\s+/).filter(s => s.trim().length > 0);
+    if (speechSegments.length === 0) {
+      speechSegments = [fullText];
+    }
+
+    // Réactiver les contrôles
+    startBtn.disabled = false;
+    startBtn.innerHTML = '<span class="btn-icon">▶</span> Start';
+    pauseBtn.disabled = true;
+    stopBtn.disabled = true;
+    speedRange.disabled = false;
+    currentIndex = 0;
+    isPaused = false;
+    isSpeaking = false;
+    progressFill.style.width = '0%';
+    progressText.textContent = '0%';
+
+    if (synthesis.speaking) synthesis.cancel();
+
+  } catch (error) {
+    console.error(error);
+    setStatus('❌ Erreur lors du traitement du PDF.', 'error');
+    uploadProgress.classList.remove('active');
   }
-
-  fullText = extracted.trim();
-  if (!fullText) {
-    status.textContent = '⚠️ Aucun texte lisible dans ce PDF.';
-    textPreview.textContent = '(Aucun texte extrait)';
-    return;
-  }
-
-  textPreview.textContent = fullText;
-  status.textContent = `✅ ${pdf.numPages} page(s) extraites — ${fullText.length} caractères.`;
-
-  // Découpage en segments
-  speechSegments = fullText.split(/\n{2,}|\.\s+/).filter(s => s.trim().length > 0);
-  if (speechSegments.length === 0) {
-    speechSegments = [fullText];
-  }
-
-  // Réactiver les contrôles
-  playBtn.disabled = false;
-  pauseBtn.disabled = true;
-  stopBtn.disabled = true;
-  speedRange.disabled = false;
-  currentIndex = 0;
-  isPaused = false;
-  isSpeaking = false;
-  progressFill.style.width = '0%';
-  progressText.textContent = '0%';
-
-  if (synthesis.speaking) synthesis.cancel();
 }
 
 // --- Sélection du fichier ---
@@ -88,14 +163,14 @@ fileInput.addEventListener('change', (e) => {
 // Drag & Drop
 dropZone.addEventListener('dragover', (e) => {
   e.preventDefault();
-  dropZone.style.borderColor = '#7fa3e6';
+  dropZone.classList.add('dragover');
 });
 dropZone.addEventListener('dragleave', () => {
-  dropZone.style.borderColor = '#3e4d66';
+  dropZone.classList.remove('dragover');
 });
 dropZone.addEventListener('drop', (e) => {
   e.preventDefault();
-  dropZone.style.borderColor = '#3e4d66';
+  dropZone.classList.remove('dragover');
   if (e.dataTransfer.files.length > 0) {
     handleFile(e.dataTransfer.files[0]);
   }
@@ -130,8 +205,9 @@ function updateProgress() {
 
 function speakSegment(index) {
   if (index >= speechSegments.length) {
-    status.textContent = '✅ Lecture terminée !';
-    playBtn.disabled = false;
+    setStatus('✅ Lecture terminée !', 'ready');
+    startBtn.disabled = false;
+    startBtn.innerHTML = '<span class="btn-icon">▶</span> Start';
     pauseBtn.disabled = true;
     stopBtn.disabled = true;
     isSpeaking = false;
@@ -162,9 +238,10 @@ function speakSegment(index) {
 
   utterance.onerror = (err) => {
     console.warn('Erreur vocale:', err);
-    status.textContent = '⚠️ Erreur de synthèse vocale.';
+    setStatus('⚠️ Erreur de synthèse vocale.', 'error');
     isSpeaking = false;
-    playBtn.disabled = false;
+    startBtn.disabled = false;
+    startBtn.innerHTML = '<span class="btn-icon">▶</span> Start';
     pauseBtn.disabled = true;
     stopBtn.disabled = true;
   };
@@ -172,23 +249,25 @@ function speakSegment(index) {
   synthesis.speak(utterance);
   isSpeaking = true;
   isPaused = false;
-  playBtn.disabled = true;
+  startBtn.disabled = true;
+  startBtn.innerHTML = '<span class="btn-icon">▶</span> Lecture...';
   pauseBtn.disabled = false;
   stopBtn.disabled = false;
-  status.textContent = `🔊 Lecture ${index + 1}/${speechSegments.length}`;
+  setStatus(`🔊 Lecture ${index + 1}/${speechSegments.length}`, 'playing');
   updateProgress();
 }
 
 // --- Boutons ---
-playBtn.addEventListener('click', () => {
+startBtn.addEventListener('click', () => {
   if (speechSegments.length === 0) return;
   if (synthesis.speaking) synthesis.cancel();
 
   if (isPaused && utterance) {
     isPaused = false;
     synthesis.resume();
-    status.textContent = '▶ Reprise';
-    playBtn.disabled = true;
+    setStatus('▶ Reprise', 'playing');
+    startBtn.disabled = true;
+    startBtn.innerHTML = '<span class="btn-icon">▶</span> Lecture...';
     pauseBtn.disabled = false;
     stopBtn.disabled = false;
     return;
@@ -203,9 +282,10 @@ pauseBtn.addEventListener('click', () => {
   if (synthesis.speaking && !isPaused) {
     synthesis.pause();
     isPaused = true;
-    playBtn.disabled = false;
+    startBtn.disabled = false;
+    startBtn.innerHTML = '<span class="btn-icon">▶</span> Reprendre';
     pauseBtn.disabled = true;
-    status.textContent = '⏸ En pause';
+    setStatus('⏸ En pause', 'ready');
   }
 });
 
@@ -214,10 +294,11 @@ stopBtn.addEventListener('click', () => {
   isSpeaking = false;
   isPaused = false;
   currentIndex = 0;
-  playBtn.disabled = false;
+  startBtn.disabled = false;
+  startBtn.innerHTML = '<span class="btn-icon">▶</span> Start';
   pauseBtn.disabled = true;
   stopBtn.disabled = true;
-  status.textContent = '⏹ Arrêté';
+  setStatus('⏹ Arrêté', 'ready');
   progressFill.style.width = '0%';
   progressText.textContent = '0%';
 });
