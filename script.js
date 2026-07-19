@@ -28,6 +28,7 @@ let isSpeaking = false;
 let utterance = null;
 let synthesis = window.speechSynthesis;
 let availableVoices = [];
+let voiceDetectionDone = false;
 
 // Désactiver les boutons au départ
 startBtn.disabled = true;
@@ -194,9 +195,13 @@ async function extractEPUBText(arrayBuffer) {
   }
 }
 
-// --- Chargement des voix ---
+// ============================================================
+// CHARGEMENT ET SÉLECTION DES VOIX
+// ============================================================
+
 function loadVoices() {
   availableVoices = synthesis.getVoices();
+  voiceDetectionDone = true;
   console.log('[Voix] Disponibles:', availableVoices.length);
   
   availableVoices.forEach(v => {
@@ -204,83 +209,98 @@ function loadVoices() {
   });
 }
 
-// ============================================================
-// SÉLECTION DE LA VOIX : MASCULINE vs FEMININE
-// ============================================================
-function getSelectedVoice() {
+// --- SÉLECTION DE LA VOIX AVEC PITCH ET RATE AJUSTÉS ---
+function getVoiceSettings() {
   const isMale = document.querySelector('input[name="voice"]:checked').value === 'male';
   
   if (availableVoices.length === 0) {
     loadVoices();
   }
 
-  // 1. Récupérer toutes les voix françaises
-  let frenchVoices = availableVoices.filter(v => v.lang.startsWith('fr'));
-  
-  // 2. Si pas de voix française, prendre toutes les voix
-  if (frenchVoices.length === 0) {
-    frenchVoices = availableVoices;
+  // 1. Récupérer toutes les voix
+  let allVoices = availableVoices.filter(v => v.lang.startsWith('fr'));
+  if (allVoices.length === 0) {
+    allVoices = availableVoices;
   }
 
-  if (frenchVoices.length === 0) {
-    console.warn('[Voix] Aucune voix disponible');
-    return null;
+  if (allVoices.length === 0) {
+    console.warn('[Voix] Aucune voix disponible - utilisation du fallback');
+    return {
+      voice: null,
+      pitch: isMale ? 0.4 : 1.5,
+      rate: isMale ? 0.7 : 1.1,
+      name: isMale ? 'Homme (grave)' : 'Femme (aiguë)'
+    };
   }
 
-  // === VOIX MASCULINE ===
+  // === VOIX MASCULINE : GRAVE ET LENTE ===
   if (isMale) {
-    // Mots-clés pour voix masculines
     const maleKeywords = [
       'male', 'man', 'guy', 'david', 'pierre', 'thomas', 'henri', 'michel', 
       'jean', 'paul', 'vincent', 'antoine', 'sebastien', 'olivier', 'philippe',
       'francois', 'eric', 'nicolas', 'christophe', 'marc', 'alexandre',
-      'm. ', 'mr ', 'monsieur', 'google uk english male', 'google us english male'
+      'm. ', 'mr ', 'monsieur', 'kirk', 'tom', 'jack', 'daniel', 'adam',
+      'deep', 'low', 'baritone', 'bass'
     ];
     
-    // Chercher une voix masculine
-    let maleVoice = frenchVoices.find(v => 
+    let maleVoice = allVoices.find(v => 
       maleKeywords.some(keyword => v.name.toLowerCase().includes(keyword))
     );
     
-    // Si trouvée, la retourner
     if (maleVoice) {
-      console.log('[Voix] Masculine sélectionnée:', maleVoice.name);
-      return maleVoice;
+      console.log('[Voix] Masculine trouvée:', maleVoice.name);
+      return {
+        voice: maleVoice,
+        pitch: 0.7,
+        rate: 0.8,
+        name: maleVoice.name
+      };
     }
     
-    // Fallback : voix avec pitch plus bas (effet masculin)
-    console.log('[Voix] Masculine (fallback):', frenchVoices[0].name);
-    return frenchVoices[0];
+    // Fallback : voix très grave et lente
+    const fallbackVoice = allVoices[0];
+    console.log('[Voix] Masculine (fallback grave et lent):', fallbackVoice.name);
+    return {
+      voice: fallbackVoice,
+      pitch: 0.4,     // TRÈS GRAVE
+      rate: 0.7,      // LENT
+      name: fallbackVoice.name + ' (grave et lent)'
+    };
   }
 
-  // === VOIX FEMININE ===
+  // === VOIX FEMININE : AIGUË ET RAPIDE ===
   else {
-    // Mots-clés pour voix féminines
     const femaleKeywords = [
       'female', 'woman', 'girl', 'samantha', 'claire', 'amelie', 'marie', 
       'zira', 'julie', 'sophie', 'emma', 'chloe', 'lea', 'ines', 'louise', 
       'alice', 'eve', 'alexia', 'elodie', 'madame', 'mme', 'ms', 'miss',
-      'google uk english female', 'google us english female'
+      'siri', 'alexa', 'cortana', 'gwyneth', 'monica', 'victoria',
+      'high', 'clear', 'sweet', 'bright'
     ];
     
-    // Chercher une voix féminine
-    let femaleVoice = frenchVoices.find(v => 
+    let femaleVoice = allVoices.find(v => 
       femaleKeywords.some(keyword => v.name.toLowerCase().includes(keyword))
     );
     
-    // Si trouvée, la retourner
     if (femaleVoice) {
-      console.log('[Voix] Féminine sélectionnée:', femaleVoice.name);
-      return femaleVoice;
+      console.log('[Voix] Féminine trouvée:', femaleVoice.name);
+      return {
+        voice: femaleVoice,
+        pitch: 1.3,
+        rate: 1.0,
+        name: femaleVoice.name
+      };
     }
     
-    // Fallback : prendre une voix avec un nom qui semble féminin
-    const fallback = frenchVoices.find(v => 
-      !/male|man|guy|david|pierre|thomas|henri|michel|jean|paul|vincent|antoine|sebastien|olivier|philippe|francois|eric|nicolas|christophe|marc|alexandre/i.test(v.name)
-    ) || frenchVoices[0];
-    
-    console.log('[Voix] Féminine (fallback):', fallback.name);
-    return fallback;
+    // Fallback : voix très aiguë et rapide
+    const fallbackVoice = allVoices[0];
+    console.log('[Voix] Féminine (fallback aiguë et rapide):', fallbackVoice.name);
+    return {
+      voice: fallbackVoice,
+      pitch: 1.6,     // TRÈS AIGUË
+      rate: 1.1,      // RAPIDE
+      name: fallbackVoice.name + ' (aiguë et rapide)'
+    };
   }
 }
 
@@ -403,16 +423,32 @@ function speakSegment(index) {
     return;
   }
 
-  const voice = getSelectedVoice();
+  // Récupérer les paramètres de voix
+  const voiceSettings = getVoiceSettings();
+  
   utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'fr-FR';
-  utterance.rate = parseFloat(speedRange.value);
-  utterance.pitch = 1.0;
   
-  if (voice) {
-    utterance.voice = voice;
-    console.log('[Lecture] Voix utilisée:', voice.name);
+  // === PARAMÈTRES SPÉCIFIQUES ===
+  // Rate : vitesse de parole (l'utilisateur peut la modifier avec le curseur)
+  const userRate = parseFloat(speedRange.value);
+  utterance.rate = voiceSettings.rate * userRate;
+  
+  // Pitch : hauteur de la voix (grave = bas, aigu = haut)
+  utterance.pitch = voiceSettings.pitch;
+  
+  // Appliquer la voix si disponible
+  if (voiceSettings.voice) {
+    utterance.voice = voiceSettings.voice;
   }
+  
+  console.log('[Lecture]', {
+    voix: voiceSettings.name,
+    pitch: utterance.pitch,
+    rate: utterance.rate,
+    userRate: userRate,
+    baseRate: voiceSettings.rate
+  });
 
   utterance.onend = () => {
     if (!isPaused) {
@@ -528,4 +564,4 @@ document.addEventListener('click', () => {
 }, { once: true });
 
 console.log('📖 Vocal Learn chargé - Formats supportés: PDF, TXT, DOCX, EPUB');
-console.log('🎤 Voix: Masculine vs Féminine - Sélection automatique');
+console.log('🎤 Voix: Masculine (grave & lente) vs Féminine (aiguë & rapide)');
